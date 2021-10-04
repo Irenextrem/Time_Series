@@ -1,0 +1,334 @@
+---
+title: 'Práctica 4: Series Temporales'
+author: "Irene Extremera Serrano"
+date: "20/3/2020"
+output: word_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+La serie temporal con la que voy a trabajar recopila información sobre fallecimientos causados por enfermedades que afectan al sistema genitourinario, procede del INE y va desde enero de 1980 a diciembre de 2017. El objetivo de esta práctica es analizar la serie temporal con estacionalidad por lo que haré uso de la serie mensual y seguiré la metodología de Box y Jenkins para identificar qué modelo ARIMA genera unas mejores predicciones.
+
+```{r, echo=TRUE}
+# Librerías a usar
+library(forecast)
+library(tseries)
+library(aod)
+setwd('D:/Desktop/Remember/Estudios/Educación Formal/Máster/Máster Valencia/Bioestadística/Curso 1/20 2-6Modelización Estadística/Series Temporales/Practicas/P5')
+```
+
+```{r,fig.width=8,fig.height=4}
+# Serie Anual
+enf_gu <- read.table('Enfermedades_del_sistema_genitourinario.txt', header = TRUE) 
+enf_mes <- ts(enf_gu,start = c(1980,1), freq = 12) 
+
+#Gráfica de las series
+autoplot(enf_mes,main='Gráfica 1: Defunciones por enfermedades genitourinarias,ylab='Defunciones',xlab='Tiempo (meses)')
+```
+
+En la gráfica uno se muestra la serie temporal con estacionalidad y con tendencia. Como para realizar el siguiente análisis necesito que la serie sea estacionaria, ergódica y lo más homocedástica posible realizo varias funciones de autocorrelación para comprobar cuántas veces hay que diferenciar estacional y regularmente.
+
+```{r,fig.width=8,fig.height=4}
+# Funciones de autocorrelación
+par(mfrow=c(1,2)) 
+acf(enf_mes, main = "Gráfica 2: Original", lag = 48) 
+acf(diff(enf_mes), main = "Gráfica 3:Regular", lag =48) 
+acf(diff(enf_mes,lag=12), main = "Gráfica 4:Estacional", lag = 48)
+acf(diff(diff(enf_mes,lag=12)), main = "Gráfica 5:Estacional y regular", lag = 48)
+```
+
+La diferenciación estacional-regular consigue una reducción muy rápida (estacionaria) y además la mayor parte de los valores quedan dentro del intervalo de confianza (ergódica), por lo que me quedo con esta. También podría considerar quedarme con la diferenciación estacional, pero tarda un poco más en caer en los primeros valores y prefiero por ello quedarme con la diferenciación estacional-regular.
+
+Una vez que me he cerciorado de que la serie es estacionaria y ergódica realizando esa diferenciación dibujo un gráfico para ver cómo es la serie.
+
+```{r,fig.width=8,fig.height=4}
+par(mfrow=c(1,1))
+plot(diff(diff(enf_mes,lag=12)),main='Gráfica 6: Diferencia', ylab='Diff(Enfermedades Mensual)', xlab='Tiempo (Meses)')
+```
+
+A la vista de la gráfica 6, he conseguido la estacionaridad en media con esta doble diferenciación (d=D=1). Sin embargo, veo que no hay una estacionaridad en varianza ya que los valores van aumentando en dispersión a medida que el tiempo avanza. Por lo que realizaré el logaritmo de la serie para conseguir la estacionaridad en varianza también.
+
+```{r,fig.width=8,fig.height=4}
+plot(diff(diff(log(enf_mes),lag=12)),main='Gráfica 7: Logaritmo de la diferencia', ylab='Diff(log(Enfermedades Mensual))', xlab='Tiempo (Meses)')
+```
+
+Como muestra la gráfica 6, efectivamente realizando el logaritmo de la serie consigo la estacionaridad en varianza para la serie temporal mensual.
+
+Una vez conseguido que la serie sea estacionaria, ergódica y lo más homocedástica posible puedo comenzar con su identificación.
+
+```{r}
+tsdisplay(diff(diff(log(enf_mes),lag=12),lag=48))
+```
+
+Lo que puedo observar en las distintas gráficas es que en la función de autocorrelación, en la parte regular hay un decrecimiento y un pico en la parte estacional, mientra que en la función de autocorrelación parcial observo un decrecimiento en la parte estacional y un pico en la parte regular. Por lo que deduzco que tengo un ARIMA(1,1,0)(0,1,1), aun así probaré autoarima para ver qué cuál es el modelo que propone.
+
+```{r}
+#Realizo el autoarima con lambda = 0 porque he usado el logaritmo en la serie
+autoa <- auto.arima(enf_mes,d=1,D=1,lambda = 0)
+autoa
+
+#Compruebo que los coeficientes son significativos en autoarima
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 1) 
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 2) 
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 3) 
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 4)
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 5) 
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 6) 
+
+#ARIMA(1,1,0)(0,1,1)
+arima0 <- Arima(enf_mes, 
+                   order=c(1,1,0),
+                   seasonal = list(order = c(0, 1, 1), period = 12),
+                   lambda = 0)
+arima0
+
+#Compruebo que los coeficientes son significativos en ARIMA(1,1,0)(0,1,1)
+wald.test(b = coef(arima0), Sigma = vcov(arima0), Terms = 1) 
+wald.test(b = coef(arima0), Sigma = vcov(arima0), Terms = 2)
+```
+
+Autoarima propone  un modelo ARIMA(2,1,2)(2,1,0) y además los valores de ar1,ar2 y ma2 sean no significativos. Aparte, al haber hecho una doble diferenciación arima asume que el modelo ya tiene media en cero por lo que considera que no hay que incluir una constante.
+Por el contrario, en el ARIMA(1,1,0)(0,1,1) ambos coeficientes son significativos y al igual que el anterior no incluye la constante.
+
+ESCRIBIR ECUACIÓN
+
+A continuación incluyo el desarrollo del modelo con el que me quedo finalmente ya que ha sido el que ha pasado los distintos criterios de validación.
+
+Ahora voy a mirar si hay algún valor atípico que merezca la pena incluir en el modelo.
+
+```{r,fig.width=8,fig.height=4}
+#Autoarima
+#Gráfica del residuo
+es <- sqrt(autoa$sig)
+ts.plot(autoa$residuals, 2*es, -2*es, 3*es, -3*es,
+        xlab = "Periodo", 
+        plot.type = "response",
+        ylab = "",
+        main = "Gráfica 8: Error de estimacion", 
+        lty = c(1, 2, 2, 2, 2),
+        col = c("black", "red", "red", "blue", "blue"))
+
+# Intervenciones
+autoa$residuals > 3*es
+autoa$residuals < -3*es
+```
+
+Se puede observa en la gráfica 8 que hay cinco valores que superan las tres desviaciones típicas por encima y por debajo por lo que sería necesario incluir esos valores en el modelo. Estos valores atípicos corresponden a: octubre de 2003, enero de 2005, febrero de 2012,abril de 1985, agosto de 1996 y junio de 1986.
+
+Incluyo las intervenciones en su respectivo modelo y veo si significativas.
+
+```{r}
+#Autoarima
+d1985 <- rep(0, length(autoa$residuals)) #abril
+d1986 <- rep(0, length(autoa$residuals)) #junio
+d1996 <- rep(0, length(autoa$residuals)) #agosto
+d2003 <- rep(0, length(autoa$residuals)) #octubre
+d2005 <- rep(0, length(autoa$residuals)) #enero
+d2012 <- rep(0, length(autoa$residuals)) #febrero
+
+ii <- order(abs(autoa$residuals), decreasing = TRUE)
+d1986[ii[456]] <- 1
+d1996[ii[455]] <-1
+d1985[ii[4]] <- 1
+d2003[ii[3]] <- 1
+d2005[ii[2]] <- 1
+d2012[ii[1]] <- 1
+
+autoa1 <- Arima(enf_mes,order= c(2,1,2),seasonal=list(order=c(2,1,0),period=12),lambda=0,xreg=cbind(d1986,d1996,d2003,d2005,d2012,d1985))
+autoa1
+
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 1) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 2) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 3) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 4)
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 5) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 6)
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 7) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 8) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 9) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 10)
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 11) 
+wald.test(b = coef(autoa1), Sigma = vcov(autoa1), Terms = 12) 
+
+```
+
+Todos los coeficientes asociados a los valores atípicos son significativos a excepción de la intervención de agosto de 1996 que tiene un p valor de 0.3 (mayor de 0.05) y junio de 1986 con un p valor de 0.85. Además, sus coeficientes siguen siendo no significativos (p valores superiores a 0.05): ar1 (0.7), ma1 (0.067) y ma2 (0.4).
+
+Una vez mejorado el modelos vuelvo a comprobar si tiene valores atípicos.
+
+```{r,fig.width=8,fig.height=4}
+#Autoarima
+#Gráfica del residuo
+autoa2 <- Arima(enf_mes,order=c(2,1,2),
+                seasonal=list(order=c(2,1,0),period=12),
+                lambda=0,
+                xreg=cbind(d2003,d2005,d2012,d1985))
+es <- sqrt(autoa2$sig)
+ts.plot(autoa2$residuals, 2*es, -2*es, 3*es, -3*es,
+        xlab = "Periodo", 
+        plot.type = "response", 
+        ylab = "",
+        main = "Gráfica 9: Error de estimacion", 
+        lty = c(1, 2, 2, 2, 2),
+        col = c("black", "red", "red", "blue", "blue"))
+
+# Intervenciones
+autoa2$residuals > 3*es
+autoa2$residuals < -3*es
+
+```
+
+Con la inclusión de las intervenciones aun siguen saliendo dos, una se corresponde con la de abril de 1985 que ya está incluida en el modelo (supera las tres desviaciones típicas por la parte superior) y agosto de 1996 la cual se incluyó en el modelo anterior pero salió no significativa. Con esto deduzco que ya he terminado de incluir intervenciones en el modelo obtenido y mejorado de autoarima.
+
+ARIMA(2,1,2)(2,1,0)
+¿¿¿¿¿¿¿ecuación asociada???????
+EXPLICACIÓN
+
+Una vez definido el modelo veo si cumple los distintos criterios de validación.
+
+```{r}
+#Calidad del modelo
+accuracy(autoa2)
+```
+
+No se puede contrastar i el residuo tiene media cero pero el error medio es 1.37.
+
+```{r}
+#Homocedasticidad
+Box.test(autoa2$residuals^2,lag=2, type='Ljung-Box')
+Box.test(autoa2$residuals^2,lag=24, type='Ljung-Box')
+```
+
+Se acepta que el residuo es homocedástico.
+
+```{r}
+#Incorrelación
+Box.test(autoa2$residuals,lag=2, type='Ljung-Box')
+Box.test(autoa2$residuals,lag=24, type='Ljung-Box')
+acf(autoa2$residuals,lag=36,ylim=c(-0.3,0.3)) #No lo incluí en word porque no sabía bien cómo identificarlo
+```
+
+El residuo es incorrelado.
+
+```{r}
+#Normalidad
+jarque.bera.test(autoa2$residuals)
+```
+
+Para un p valor de 0.195 se acepta la hipótesis de normalidad.
+
+Una vez que el modelo ha sido validado puedo ver cómo de bueno es para realizar predicciones.
+
+```{r}
+accuracy(autoa2)
+```
+
+Para empezar el MAPE es de 5.34% lo cual quiere decir que el modelo es bueno a la hora de realizar predicciones. Además, el ACIF1 es bastante bajo, de 0.02, lo cual indica que la capacidad de mejora de las predicciones por intervalo es bastante baja. Aparte, en media el modelo se equivoca 48.35 casos (RMSE).
+
+A continuación realizaré una predicción del número de fallecimientos a tres años vista y su intervalo al 80 y 95.
+
+```{r}
+#Predicción
+pautoa2 <- forecast(autoa2, h=36,level =c(80,95), xreg = cbind(rep(0,36),rep(0,36),rep(0,36),rep(0,36)))
+pautoa2 
+
+#Diferencia de un año a otro por meses 
+pautoa2$mean[1:12]-pautoa2$mean[13:24]
+pautoa2$mean[13:24]-pautoa2$mean[25:36]
+
+# Meses en los que el número de fallecimientos es mayor y menor por año
+which.max(pautoa2$mean[1:12])
+which.max(pautoa2$mean[13:24])
+which.max(pautoa2$mean[25:36])
+which.min(pautoa2$mean[1:12])
+which.min(pautoa2$mean[13:24])
+which.min(pautoa2$mean[25:36])
+```
+
+En los distintos años predichos se observa que tanto el número de fallecimientos como su intervalo es mayor en los meses más frios como diciembre y enero y más bajos en meses con temperaturas más suaves como octubre. 
+Otra cosa a mencionar es que hay un incremento progresivo en el número de fallcimientos de un año a otro, por lo que la tendencia es positiva.
+
+Para verlo de forma gráfica:
+
+```{r}
+autoplot(pautoa2, ylab='Casos de fallecimientos',xlab='Tiempo (meses)', xlim=c(2000,2020),main='Gráfica 10: Predicción a tres años vista')
+```
+
+En la gráfica 12 se puede observar lo mencionado anteriormente, el número de fallecimientos aumenta de un año para otro lo cual hace que la tendencia sea positiva y en los tres años coinciden los meses con más  número de muertes (enero y diciembre) y con menos (octubre).
+
+Para finalizar la práctica haré una comparación con el modelo de alisado obtenido en la práctica 2.
+
+```{r}
+enf_ets <- ets(enf_mes) 
+summary(enf_ets)
+```
+
+El valor de MAPE (error porcentual absoluto medio) es de 4.945% lo cual indica que la calidad de predicción del modelo es muy alta, de hecho es menor al ARIMA anterior.Aparte, el valor de MASE es del 0.642% por lo que el modelo de alisado no es mucho mejor con respecto al modelo más sencillo que podría aplicarse, lo cual no dista mucho a lo obtenido anteriormente en donde el MASE era del 0.690%. Para terminar el ACF1 toma un valor de 0.1147674% ligeramente superior al anterior.
+
+En caso de tener que decantarme por alguno de los modelos me decantaría sin duda por el de alisado debido a que es más sencillo de obtener y las predicciones que dan son ligeramente mejores al ARIMA.
+
+```{r}
+k <- 60                   #Minimo numero de datos para estimar
+h <- 12                    #Horizonte de las predicicones
+T <- length(enf_mes)     #Longitud serie
+s<-T - k - h               #Total de estimaciones
+
+mapeArima <- matrix(NA, s, h)
+mapeAlisado <- matrix(NA, s, h)
+
+X <- cbind(d2003,d2005,d2012,d1985)  #TUS OUTLIERS
+
+for (i in 0:s) {
+  train.set <- subset(enf_mes, start = i + 1, end = i + k)
+  test.set <-  subset(enf_mes, start = i + k + 1, end = i + k + h) 
+  
+  X.train <- X[(i + 1):(i + k),]
+  hay <- colSums(X.train)
+  X.train <- X.train[, hay>0]
+  
+  X.test <- X[(i + k + 1):(i + k + h),]
+  X.test <- X.test[, hay>0]
+  
+  if (length(X.train) > 0) {
+    fit <- try(Arima(train.set, 
+                 order = c(2, 1, 2),  #TU IDENTIFICACION
+                 seasonal = list(order = c(2, 1, 0), period = 12),   #TU IDENTIFICACION
+                 lambda = 0,   #O NADA SI NO USAS LOGARITMO
+                 xreg=X.train), silent = TRUE)} else {
+                   fit <- try(Arima(train.set, 
+                                order = c(2, 1, 2),  #TU IDENTIFICACION
+                                seasonal = list(order = c(2, 1, 0), period = 12),  #TU IDENTIFICACION
+                                lambda = 0), #O NADA SI NO USAS LOGARITMO
+                             silent = TRUE)
+                 }
+  
+  if (!is.element("try-error", class(fit))) {
+    if (length(X.train) > 0) fcast <- forecast(fit, h = h, xreg = X.test) else
+      fcast <- forecast(fit, h = h)
+    mapeArima[i,] <- 100*abs(test.set - fcast$mean)/test.set
+  }
+  
+  fit <- ets(train.set, model = "MAM", damped = FALSE)    #TU MODELO. NADA DE Zs
+  fcast<-forecast(fit, h = h)
+  mapeAlisado[i,] <- 100*abs(test.set - fcast$mean)/test.set
+}
+  
+errorArima <- colMeans(mapeArima, na.rm = TRUE)
+errorArima
+
+errorAlisado <- colMeans(mapeAlisado)
+errorAlisado
+```
+
+
+```{r}
+plot(errorAlisado,
+     type = 'l',col = 'red', lwd = 2, lty = 2,
+     xlab = 'Horizonte de prevision (meses)', ylab = '%',
+     main = 'Gráfica 11:MAPE segun horizonte de prevision',
+     xaxp = c(1,12,11), yaxp = c(2,4,4))
+lines(errorArima,
+     col = "blue", lwd = 2, lty = 1)
+     legend("topleft", legend = c("ARIMA","Alisado"),
+     col = c("Blue","Red"), lwd = 2, lty = c(1, 2), cex = .9)
+```

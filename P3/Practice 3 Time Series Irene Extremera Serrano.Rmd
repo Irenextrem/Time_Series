@@ -1,0 +1,113 @@
+---
+title: "Práctica 3 Series Temporales"
+author: "Irene Extremera Serrano"
+date: "25 de febrero de 2020"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+La serie temporal con la que voy a trabajar es sobre casos de fallecimientos a causa de enfermedades del sistema genitourinario, procede del INE y va desde enero de 1980 a diciembre de 2017.
+El objetivo de esta práctica es identificar si las series temporales anual y mensual de enfermedades genitourinarias son estacionarias y ergódicas, y en caso de no serlo, realizar las transformaciones necesarias para que así sea.
+
+
+# Serie temporal anual
+
+Primero trabajaré con la serie anualizada de casos de fallecimientos y haré una representación para ver si la serie temporal es estacionaria en media, es decir, que el nivel se mantenga a medida que pasa el tiempo (primer orden) y que su variabilidad sea finita y constante en el tiempo (segundo orden).
+
+Primero compararé la serie temporal anualizada con ella misma diferenciada regularmente una vez.
+
+```{r,fig.width=8,fig.height=4}
+enf_gu <- read.table('Enfermedades_del_sistema_genitourinario.txt', header = TRUE)
+enf_gu <- ts(enf_gu,start = c(1980,1), freq = 12)
+enf_año <- aggregate(enf_gu,FUN = sum)
+
+#Estacionaridad en media
+par=mfrow=c(1,2)
+plot(enf_año,main='Gráfica 1: Número de fallecimientos por año',ylab='Fallecimientos por enfermedades Genitourinarias',xlab='Tiempo (años)') 
+plot(diff(enf_año),main='Gráfica 2: Diferencia número de fallecimientos', ylab='Diff(Enfermedades Anual)', xlab='Tiempo (años)') 
+```
+
+Como puedo observar, la gráfica dos presenta una tendencia estacionaria en media en contraposición a lo que me muestra la gráfica anual uno que presenta una tendencia ascendente. Por lo tanto para conseguir la estacionaridad voy a tener que diferencar una vez. Sin embargo, para poder cerciorarme de ello realizo las funciones de autocorrelación de la serie anualizada sin diferenciar y diferenciada, pues de esa forma podré observar mejor la estacionaridad y la ergodicidad.
+
+```{r,fig.width=8,fig.height=4}
+par(mfrow=c(1,2))
+#Correlación
+acf(enf_año, main = "Gráfica 3: Sin diferenciar", lag = 20)
+acf(diff(enf_año), main = "Gáfica 4: Diferenciación",lag = 20)
+```
+ 
+Por un lado, el gráfico 3 muestra la función de autocorrelación de la serie anualizada sin diferenciar y se observa que no hay estacionaridad, esto se ve en que los picos (los distintos valores de los ro) tardan mucho en acercarse a cero. Aparte, se aprecia una ausencia de ergodicidad debido a que hay una gran cantidad de valores por encima del intervalo de confianza.  
+
+Por el contrario, en la gráfica 4 aparece la función de autocorrelación de la serie anualizada diferenciada y los valores se acercan a cero muy rápidamente, lo cual me indica que la serie es estacionaria y además prácticamente todos los valores están dentro del intervalo de confianza, y esto es indicativo de que es ergódica.
+
+Con esto concluyo que para conseguir estacionaridad y ergodicidad en la serie anual he de diferenciar al menos una vez. Sin embargo, para obtener una segunda comprobación realizo un contraste de raices unitarias.
+
+```{r}
+library(urca)
+gdet <- ur.kpss(enf_año,type ='tau',lags = 'short') 
+summary(gdet) 
+```
+
+El estadístico de contraste es de 0.2331 mientras que el valor crítico (5%) es de  0.146, por lo que rechazo la hipótesis nula y asumo que en la serie anualizada hay tendencia determinista y estocástica. 
+
+```{r}
+gest <- ur.kpss(enf_año, type ='mu', lags = 'short') 
+summary(gest)
+```
+
+Al realizar el segundo contraste, obtengo que el estadístico es de 1.0088  mientras que el valor crítico (5%) es de  0.463, por lo que acepto la hipótesis nula de que haya tendencia estocástica.
+
+Todo esto no hace nada mas que reforzar lo visto anteriormente de que voy a tener que diferenciar al menos una vez para poder conseguir estacionaridad.
+
+# Serie Temporal Mensual
+
+Una vez conseguida la ergodicidad y la estacionaridad de la serie anual me pongo a analizar la serie mensual. 
+Para ello, voy a comenzar visualizando las funciones de autocorrelación de: la serie original, diferenciada estacional, regular y estacional-regular.
+
+```{r,fig.width=7,fig.height=5}
+par(mfrow=c(2,2))
+acf(enf_gu, main = "Original", lag = 48) 
+acf(diff(enf_gu), main = "Regular", lag =48) 
+acf(diff(enf_gu,lag=12), main = "Estacional", lag = 48) 
+acf(diff(diff(enf_gu,lag=12)), main = "Estacional y regular", lag = 48)
+```
+
+Fijándome en las funciones de autocorrelación anuales veo que haciendo una diferenciación estacional-regular se consigue una reducción muy rápida (estacionaria) y además la mayor parte de los valores quedan dentro del intervalo de confianza (ergodica). 
+También podría considerar quedarme con la diferenciación estacional, pero tarda un poco más en caer en los primeros valores y prefiero por ello quedarme con la diferenciación estacional-regular.
+
+Una vez que me he cerciorado de que la serie es estacionaria y ergódica realizando esa diferenciación realizo un gráfico para ver cómo es la serie.
+
+```{r}
+par(mfrow=c(1,1))
+plot(diff(diff(enf_gu,lag=12)),main='Gráfica 5: Diferencia', ylab='Diff(Enfermedades Mensual)', xlab='Tiempo (Meses)')
+```
+
+A la vista de la gráfica 5, he conseguido la estacionaridad en media con esta doble diferenciación. Sin embargo, veo que no hay una estacionaridad en varianza ya que los valores van aumentando en dispersión a medida que el tiempo avanza. Por lo que realizaré el logaritmo de la serie para conseguir la estacionaridad en varianza también.
+
+```{r}
+par(mfrow=c(1,1))
+plot(diff(diff(log(enf_gu),lag=12)),main='Gráfica 6: Logaritmo de la diferencia', ylab='Diff(log(Enfermedades Mensual))', xlab='Tiempo (Meses)')
+```
+
+Como muestra la gráfica 6, efectivamente realizando el logaritmo de la serie consigo la estacionaridad en varianza para la serie temporal anual.
+
+A pesar de ya haber concluido que la serie es estacionaria en media, varianza y también ergódica, para tener una segunda confirmación en cuanto a si hay o no que diferenciar, realizo el contraste de raices unitarias.
+
+```{r}
+library(urca)
+gdetgu <- ur.kpss(enf_gu,type ='tau',lags = 'short') 
+summary(gdetgu) 
+```
+
+El estadístico de contraste es de 0.9292 mientras que el valor crítico (5%) es de  0.146, por lo que rechazo la hipótesis nula y asumo que hay tendencia determinista y estocástica. De modo que voy a tener que diferenciar al menos una vez para poder conseguir estacionaridad.
+
+```{r}
+gestgu <- ur.kpss(enf_gu, type ='mu', lags = 'short') 
+summary(gestgu)
+```
+
+Al realizar el segundo contraste, obtengo que el estadístico de contraste es de 6.9754   mientras que el valor crítico (5%) es de  0.463, por lo que rechazo la hipótesis alternativa de que no haya tendencia estocástica.
+
+Tras realizar estos contrastes refuerzo lo que he observado anteriormente, voy a tener que diferenciar para poder conseguir la estacionaridad en la serie temporal mensual.
+

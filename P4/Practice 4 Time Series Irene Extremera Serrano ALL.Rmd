@@ -1,0 +1,291 @@
+---
+title: 'Práctica 4: Series Temporales'
+author: "Irene Extremera Serrano"
+date: "20/3/2020"
+output: word_document
+---
+
+La serie temporal con la que voy a trabajar recopila información sobre fallecimientos causados por enfermedades que afectan al sistema genitourinario, procede del INE y va desde enero de 1980 a diciembre de 2017. El objetivo de esta práctica es analizar la serie temporal sin estacionalidad, por lo que haré uso de la serie anualizada, y seguiré la metodología de Box y Jenkins para identificar qué modelo ARIMA genera unas mejores predicciones.
+
+```{r}
+# Librerías a usar
+library(forecast)
+library(tseries)
+library(aod)
+setwd('D:/Desktop/Remember/Estudios/Educación Formal/Máster/Máster Valencia/Bioestadística/Curso 1/20 2-6Modelización Estadística/Series Temporales/Practicas/P4')
+
+# Serie Anual
+enf_gu <- read.table('Enfermedades_del_sistema_genitourinario.txt', header = TRUE) 
+enf_gu <- ts(enf_gu,start = c(1980,1), freq = 12) 
+enf_año <- aggregate(enf_gu,FUN = sum) 
+
+#Gráfica de las series
+plot(enf_año,main='Gráfica 1: Número de fallecimientos por año',ylab='Fallecimientos por enfermedades Genitourinarias',xlab='Tiempo (años)')
+plot(diff(enf_año),main='Gráfica 2: Diferencia número de fallecimientos', ylab='Diff(Enfermedades Anual)', xlab='Tiempo (años)')
+```
+
+En la gráfica uno se muestra la serie temporal anualizada sin estacionalidad y con tendencia. Como para realizar el siguiente análisis necesito que la serie sea estacionaria realizo una primera diferenciación (d=1) y tal y como muestra la gráfica dos efectivamente de esa manera la serie se torna estacionaria. Sin embargo, para asegurarme realizaré la función de autocorrelación de la serie anual sin diferenciar y diferenciada.
+
+```{r}
+# Funciones de autocorrelación
+par(mfrow=c(1,2))
+acf(enf_año, main = "Gáfica 3: FAC Sin diferenciar",lag = 20)
+acf(diff(enf_año), main = "Gáfica 4: FAC diferenciaca",lag = 20)
+```
+
+Al comparar ambas funciones de autocorrelación se ve enseguida que en la gráfica tres que corresponde a la función de autocorrelación de la serie anual sin diferenciar, hay un decrecimiento progresivo, que por el contrario no ocurre en la gráfica 4 (serie anual diferenciada), en donde después del primer valor de ro (excluyendo ro 0) el resto de valores quedan dentro del intervalo de confianza. Esto me indica que efectivamente voy a tener que diferenciar al menos una vez para que la serie sea estacionaria en tendencia.
+
+Una vez conseguida la estacionaridad observo el comportamiento de la gráfica de autocorrelación y la gráfica de autocorrelación parcial de la serie anual diferenciada una vez para ver qué modelo se ajustaría mejor a la serie.
+
+```{r}
+par(mfrow=c(1,2))
+acf(diff(enf_año), main = "Gáfica 4: Función de Autocorrelación",lag = 20)
+pacf(diff(enf_año), main = "Gáfica 5: Función de Autocorrelación Parcial",lag = 20)
+```
+
+En la gráfica tres se muestra la función de autocorrelación, en la cual hay un valor en uno que supera las tres desviaciones típicas y el resto de valores quedan dentro de los intervalos de confianza. Lo mismo ocurre en la gráfica cuatro (función de autocorrelación parcial), hay un valor elevado en el primer valor y el resto son bastante pequeños (no superan las tres desviaciones típicas).
+Con respecto a si hay o no decrecimiento, no se ve muy claro en ninguna de las dos gráficas, o por lo menos no soy capaz de identificarlo.
+
+Como no me han parecido muy claras las gráficas anterires, voy a ver cuál es el modelo que me recomienda autoarima.
+
+```{r}
+autoa <- auto.arima(enf_año, d=1)
+# aA <- auto.arima(enf_año, d=1,method='ML')
+
+# a111 <- arima(enf_año,order=c(1,1,1))
+# a1 <- arima(enf_año,order=c(1,1,1),method='ML')
+
+
+autoa
+# aA
+# a111
+# a1
+```
+
+Autoarima me recomienda un modelo (1,1,0) el cual me recomienda incluir la constante en el modelo, con un coeficiente de valor -0.3709 (no supera el valor de 1 por lo que el modelo parece que se ajusta bien) y con un AIC de 544.85.
+
+<!-- Por otro lado, el modelo que he deducido excluye la constante y su AIC es de 557.71, ligeramente superior al anterior y podría decirse que este modelo es peor. -->
+<!-- En ambos modelos los coeficientes son menores que 1 por lo que la identificación del modelo no es mala y no sería necesario mirar intervenciones que deba incluir. -->
+<!-- Con respecto al AIC, a pesar de que el valor de AIC del autoarima es mejor que el modelo ARIMA (1,1,1) voy a trabajar con ambos modelos en paralelo para quedarme finalmente con el que mejor predicciones haga de la serie.  -->
+
+Una vez decidido como modelo el ARIMA (1,1,0) compruebo con el test de Wald si los coeficientes y la deriva son significativos.
+
+```{r}
+#ARIMA(1,1,0)
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 1) 
+wald.test(b = coef(autoa), Sigma = vcov(autoa), Terms = 2) 
+
+#ARIMA(1,1,1)
+# wald.test(b = coef(a111), Sigma = vcov(a111), Terms = 1) 
+# wald.test(b = coef(a111), Sigma = vcov(a111), Terms = 2) 
+```
+
+Con esto se comprueba que tanto la constante como el coeficiente salen significativos, y por lo tanto a incluir en el modelo final. Antes de escribir la ecuación del modelo a validar, comprobaré si hay valores atípicos (intervenciones) que puedan afectar a las predicciones.
+<!-- Lo mismo ocurre con el modelo ARIMA(1,1,1), ambos coeficientes tienen un valor menor a 0.05 y por lo tanto han de incluirse. -->
+
+<!-- Por lo tanto tengo dos modelos a validar: -->
+<!-- ARIMA (1,1,0) -->
+
+<!-- ARIMA (1,1,1) -->
+
+Para ello utilizo el residuo de la serie.
+
+```{r}
+#Valores atípicos ARIMA (1,1,0)
+esauto <- sqrt(autoa$sig)
+ts.plot(autoa$residuals,2*esauto,-2*esauto,3*esauto,-3*esauto,xlab='Periodo',plot.type='single',ylab='', main='Gráfica 6: Error de estimación Autoarima',lty=c(1,2,2,2,2), col=c('black','red','red','blue','blue'))
+#Miro el año
+autoa$residuals > 2*esauto #2017 y 2012
+
+#Valores atípicos en ARIMA (1,1,1)
+# esa111 <- sqrt(a111$sig)
+# ts.plot(a111$residuals,2*esa111,-2*esa111,3*esa111,-3*esa111,xlab='Periodo',plot.type='single',ylab='', main='Gráfica 6: Error de estimación ARIMA(1,1,1)',lty=c(1,2,2,2,2), col=c('black','red','red','blue','blue'))
+#Miro el año
+# a111$residuals > 2*esa111 #2017,2012 y 2005
+```
+
+Se puede apreciar que hay dos valores que superan las dos desviaciones típicas, concrétamente en los años 2017 y 2012. 
+Al ser solamente dos valores que superan ligeramente las dos desviaciones no voy a considerar el incluirlos en el modelo final.
+
+<!-- En ambos modelos se aprecian dos intervenciones muy leves que superan las dos desviaciones típicas. En la gráfica 5, que corresponde a ARIMA (1,1,0) hay dos valores, uno en 2017 y otro en 2012, mientas que en la gráfica 6, la cual pertenece a ARIMA (1,1,1), se aprecian esas dos intervenciones más la de 2005.  -->
+
+<!-- Por lo tanto voy a incluir estas intervenciones en sus respectivos modelos y a continuación ver si son o no significativos sus coeficientes. Porque aunque solo superen las dos desviaciones típicas no tengo la suficiente información como para descartar si son o no influyentes en las predicciones. -->
+
+```{r}
+#Para el modelo ARIMA(1,1,0)
+# iiauto <- order(abs(autoa$residuals), decreasing = TRUE) #Residuos ordenados de forma decreciente
+# da2017 <- rep(0,length(autoa$residuals)) #vector de 0 en ese año
+# da2012 <- rep(0,length(autoa$residuals)) #vector de 0 en ese otro año
+# da2012[iiauto[2]] <- 1 #Posición del segundo residuo mas grande
+# da2017[iiauto[1]] <- 1 #Posición del primer residuo mas grande
+
+#Para el modelo ARIMA(1,1,1)
+# iia111 <- order(abs(a111$residuals),decreasing=TRUE)
+# d12017 <- rep(0,length(a111$residuals))
+# d12012 <- rep(0,length(a111$residuals))
+# d12005 <- rep(0,length(a111$residuals))
+# d12017[iia111[1]] <- 1
+# d12012[iia111[2]] <- 1
+# d12005[iia111[3]] <- 1
+
+#Incluyo las intervenciones en el modelo
+# autoar <- auto.arima(enf_año,
+#                      d=1,
+#                      xreg=cbind(da2012,da2017),
+#                      method="ML")
+# 
+# a111r <- arima(enf_año,
+#                order=c(1,1,1),
+#                method="ML",
+#                xreg= cbind(d12017,d12012,d12005))
+# autoar
+# autoa
+# a111r
+# a111
+
+```
+
+<!-- Observando los distintos modelos con intervención observo que los valores de los coeficientes son menores que 1 lo cual indica que las identificaciones son válidas. Además, al comparándolos con los modelos sin la intervención se aprecia que el AIC es ligeramente más bajo.  -->
+<!-- A continuación, realizaré una comprobación de que la inclusión de las intervenciones en el modelo sea relevante. -->
+
+```{r}
+#Miro si son significativos
+#ARIMA(1,1,0)
+# wald.test(b = coef(autoar), Sigma = vcov(autoar), Terms = 1) 
+# wald.test(b = coef(autoar), Sigma = vcov(autoar), Terms = 2) 
+# wald.test(b = coef(autoar), Sigma = vcov(autoar), Terms = 3) 
+# wald.test(b = coef(autoar), Sigma = vcov(autoar), Terms = 4) 
+
+#ARIMA(1,1,1)
+# wald.test(b = coef(a111r), Sigma = vcov(a111r), Terms = 1) 
+# wald.test(b = coef(a111r), Sigma = vcov(a111r), Terms = 2)
+# wald.test(b = coef(a111r), Sigma = vcov(a111r), Terms = 3)
+# wald.test(b = coef(a111r), Sigma = vcov(a111r), Terms = 4)
+# wald.test(b = coef(a111r), Sigma = vcov(a111r), Terms = 5)
+
+```
+
+<!-- Tras haber realizado el test de wald para los modelos con intervenciones se muestra que todos los coeficientes de los modelos son significativos en ambos ARIMA (son menores a 0.05), de modo que usaré ¿¿¿¿¿¿¿¿¿¿¿??????????????? -> AUTOARIMA D=1 -->
+
+Una vez que me he decantado por el modelo ARIMA(1,1,0) comienzo con su validación. Comenzando con el análisis del error se observa lo siguiente:
+
+```{r}
+#Calidad de los modelos
+accuracy(autoa)
+# accuracy(a111)
+# accuracy(autoar)
+# accuracy(a111r)
+```
+
+En ARIMA(1,1,0) e ME de -0.423077 es muy cercano a 0 (casi nulo), en cuanto al RMSE en media el modelo se equivoca en ARIMA(1,1,0) 342.9881 casos, o visto de otra forma, el error porcentual medio MAPE es de 3.25%. Esto me indica que el modelo con ese MAPE es bastante bueno.
+<!-- mientras que en ARIMA (1,1,1) el ME es mucho más elevado, de 210.5141. -->
+<!-- y en ARIMA(1,1,1) 411.5769 casos.  -->
+<!-- y 3.41% respectivamente,  -->
+<!-- lo cual indica que ambos modelos son bastante buenos siendo el obtenido por autoarima ligeramente mejor. -->
+
+A continuación, el aplicando test de box para comprobar homocedasticidad se comprueba que que:
+
+```{r}
+#Homocedasticidad
+Box.test(autoa$residuals^2,lag=2, type='Ljung-Box')
+# Box.test(a111$residuals^2,lag=2, type='Ljung-Box')
+# Box.test(autoar$residuals^2,lag=2, type='Ljung-Box')
+# Box.test(a111r$residuals^2,lag=2, type='Ljung-Box')
+```
+Para un k=2 se aceptan que se cumple la hipótesis de homocedasticidad.
+
+Para finalizar los test de validación compruebo la normalidad del residuo.
+
+```{r}
+#Normalidad
+jarque.bera.test(autoa$residuals)
+# jarque.bera.test(a111$residuals)
+# jarque.bera.test(autoar$residuals)
+# jarque.bera.test(a111r$residuals)
+```
+
+Para un p valor de 0.43 en ARIMA(1,1,0) y de 0.304 en ARIMA(1,1,1) se acepta la hipótesis de normalidad para el modelo ARIMA(1,1,0).
+
+Una vez visto el modelo es bueno y válido para generar predicciones predigo con él a 5 años vista.
+
+```{r}
+pautoa <- forecast(autoa, h=5, level=c(80,95))
+
+mediaa <- pautoa$mean
+lowa1 <- pautoa$lower[,1]
+lowa2 <- pautoa$lower[,2]
+upa1 <- pautoa$upper[,1]
+upa2 <- pautoa$upper[,2]
+mata <- matrix(c(mediaa,lowa1,upa1,lowa2,upa2),nrow=5,ncol=5)
+añosa <- c('2018','2019','2020','2021','2022')
+ICma <- c('Media','Low 80','Hi 80', 'Low 95', 'Hi 95')
+colnames(mata)<- ICma
+row.names(mata) <- añosa
+mata
+
+# pa111 <- forecast(a111,h=5, level=c(80,95))
+# media1 <- pa111$mean
+# low11 <- pa111$lower[,1]
+# low12 <- pa111$lower[,2]
+# up11 <- pa111$upper[,1]
+# up12 <- pa111$upper[,2]
+# mat1 <- matrix(c(media1,low11,up11,low12,up12),nrow=5,ncol=5)
+# años1 <- c('2018','2019','2020','2021','2022')
+# ICm1 <- c('Media','Low 80','Hi 80', 'Low 95', 'Hi 95')
+# colnames(mat1)<- ICm1
+# row.names(mat1) <- años1
+# mat1
+# 
+# pautoar <- forecast(autoar, h=5, level=c(80,95), xreg=cbind(da2012=rep(0,5),da2017=rep(0,5)))
+# mediar <- pautoar$mean
+# low1r <- pautoar$lower[,1]
+# low2r <- pautoar$lower[,2]
+# up1r <- pautoar$upper[,1]
+# up2r <- pautoar$upper[,2]
+# matr <- matrix(c(mediar,low1r,up1r,low12r,up12r),nrow=5,ncol=5)
+# añosr <- c('2018','2019','2020','2021','2022')
+# ICmr <- c('Media','Low 80','Hi 80', 'Low 95', 'Hi 95')
+# colnames(matr)<- ICmr
+# row.names(matr) <- añosr
+# matr
+# pa111r <- forecast(a111r,h=5,level=c(80,95), xreg=cbind(d12012=rep(0,5),d12017=rep(0,5),d12005=rep(0,5)))
+```
+
+La predicción resultante muestra que la media de casos de fallecimientos por enfermedades que afectan al sistema genitourinario va aumentando de un año a otro progresivamente, en 2018 el número es de 13092.59 y asciende hasta fallecimientos 13992.45 en 2022, un incremento de 899.86 casos.
+Lo mismo ocurre con el intervalo de confianza, van incrementándose progresivamente a medida que pasan los años: el intervalo al 80 y 90 por ciento por debajo pasan de 12634.58 y 12392.12 a 13194.52 y 12772.12 respectivamente, y por encima pasan de 13550.59 y 13793.05 a 14790.38 y 15212.78 de 2018 a 2022.
+
+Para poder ver esto de forma gráfica.
+
+```{r}
+autoplot(pautoa, main='Predicción ARIMA (1,1,0)', ylab='Casos Enfermedades Genitourinarias', xlab='Tiempo (Años)')
+# autoplot(pa111)
+# autoplot(pautoar)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

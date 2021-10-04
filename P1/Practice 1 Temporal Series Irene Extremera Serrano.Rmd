@@ -1,0 +1,145 @@
+---
+title: "Práctica 1 Series Temporales Bioestadística"
+author: "Irene Extremera Serrano"
+date: "22/2/2020"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+
+# Práctica 1
+
+## Ejercicio 1
+
+Esta serie temporal, enfermedades del sistema genitourinario, procede del INE y muestra el número de fallecimientos debidos a enfermedades genitourinarias desde enero de 1980 a diciembre de 2017.
+
+### Apartado a. 
+
+```{r lectura, fig.width=8, fig.height=6}
+Enf_GU <- read.csv("D:/Desktop/Remember/Estudios/Educación Formal/Máster/Máster Valencia/Bioestadística/Curso 1/20 2-6Modelización Estadística/Series Temporales/Temas/T1/Enfermedades_del_sistema_genitourinario.txt")
+
+Enf_GU <- ts(Enf_GU, start = c(1980,1), freq = 12) 
+plot(Enf_GU,xlab = "Periodo", ylab = "Casos", type='l',main = "Enfermedades Genitourinarias", lwd = 2, xaxt = "n")
+axis(1, at = 1980:2017, las = 2)
+abline(v = seq(1980,2017,2), lwd = .7, lty = 2, col = "BLUE") # En azul está señalado enero.
+vector <- c()
+for(i in 1:12) vector[i] <- print(Enf_GU[(12*37)+i])
+max(vector)-min(vector)
+```
+
+Se puede observar que el número de estas ha ido aumentando a medida que pasa el tiempo, es decir, que experimenta una tendencia creciente.Sin embargo, parece que entre los años 1990 y 1998 la tendencia se ha mantenido estacionaria. 
+Por otro lado, las líneas transversales azules discontinuas indican el mes de enero cada dos años, esto me permite apreciar que parece una ligera componente estacional la cual parece que se va acentuando a medida que lo hace la tendencia ascendente.
+Además, en el último año la diferencia de incidencia entre el mes con más muertes y el de menos muertes es de 360 casos. 
+Debido a todo el análisis preliminar anterior, intuyo que la serie temporal presenta un esquema multiplicativo.
+
+### Apartado b
+
+```{r serie anual}
+enf_gu_sum <- aggregate(Enf_GU,FUN=sum)
+plot(enf_gu_sum, main='Número de fallecimientos por año', xlab='Tiempo (años)',ylab='Casos genitourinarios')
+enf_gu_sum-enf_gu_sum[-1]
+```
+
+En este primer gráfico se muestra el número de fallecimientos (eje de las y) frente a los distintos años (eje de las x). Con este tipo de gráfica se aprecia que la tendencia de la serie es positiva, lo cual quiere decir que el número de casos en España parece que va a ir aumentando a medida que el tiempo pasa.
+
+### Apartado c
+
+```{r esquema}
+gu_año <- as.numeric(aggregate(Enf_GU, FUN = sum))
+gu_añosd <- as.numeric(aggregate(Enf_GU,FUN = sd))
+plot(gu_año,gu_añosd,pch = 20, col = "Blue",xlab = "Número de casos", ylab = "Desviacion Tipica", main='Desviación típica-Casos')
+abline(lm(gu_añosd ~ gu_año), lty = 2)
+```
+
+Para poder ver con claridad si la serie presenta un esquema multiplicativo o aditivo, represento la suma del número de fallecimientos en España a causa de enfermedades que afectan al sistema genitourinario (eje de abscisas) con respecto a la desviación típica intra-anual (eje de ordenadas). El resultado es una relación lineal entre ambas variables, esto indica que a medida que aumenta el número de casos la variabilidad aumenta, confirmando así que la serie sigue un esquema multiplicativo. 
+
+
+### Apartado d
+
+```{r 1d, warning=FALSE}
+egu_decmul <- decompose(Enf_GU, type = "mult") # Descomposición de la serie gráfica en cada componente.
+
+tendencia <- window(egu_decmul$trend,start = c(1980, 7), end = c(2017, 6))
+ts.plot(Enf_GU,tendencia,plot.type = "single", col = c("Black", "Blue"), lwd = c(1,2), xlab = 'Periodo',main='Tendencia',ylab='Número de casos')
+legend("topright", legend = c('Original', 'Tendencia'),
+col = c("Black", "Blue"), lty=c(1, 1), lwd = c(1, 2)) # Tendencia
+```
+
+En este gráfico se representa la tendencia de la serie temporal superpuesta a la serie temporal. Como he dicho anteriormente la tendencia creciente, lo cual quiere decir que a medida que pasa el tiempo el número de casos va a incrementarse. Además se aprecia bien que de 1980 a 1990 la tendencia es creciente, mientras que a partir de 1990 se vuelve estacionaria, volviendo a cambiar en 1998 a una tendencia creciente. 
+
+Este comportamiento puede ser debido a que las condiciones de vida 1980 a 1990 mejoraron un poco y eso aumentó la esperanza de vida, de modo que las personas al vivir más, desarrollaban más enfermedades y entre ellas estas. El que se mantenga estacionaria puede indicarme que esas condiciones de calidad de vida se mantuvieron a lo largo de ese periodo y a partir de 1998 volvieron a mejorar de tal forma que la esperanza de vida fue ido aumentando gradualmente y con ella el número de fallecimientos debido a esta enfermedad.
+
+```{r 2d, warning=FALSE}
+
+estacionalidad <- tapply(Enf_GU / mean(Enf_GU), cycle(Enf_GU), mean) 
+
+plot(egu_decmul$figure, type = 'b', xlab = 'Mes', ylab = 'Efecto estacional',col = "Black", pch = 20, lwd = 2, xaxt = "n", ylim = c(0.8, 1.20),main='Estacionalidad')
+lines(1:12, estacionalidad, col = "Green", pch = 20, lwd = 2, type ="b")
+axis(1, at = 1:12, labels = c("Ene", "Feb", "Mar", "Abr", "May","Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"))
+abline(h = 1, lty = 2, lwd = 2, col = "Red")
+legend("topright",legend = c('Descomposición', 'Logaritmo'), col = c("Black","Green"),pch = 20, lwd = 2) 
+```
+
+Aquí se ilustra la componente estacional estimada a partir del método de descomposición (linea negra) y la componente estacional estimada a partir la media intra-anual y el ratio de la serie.
+Como se puede comrpobar, ambas estimaciones son muy similares, en donde la componente estacional estimada a partir delmétodo descriptivo presenta un efecto estacional más suave que la estimada por el método de descomposición.
+
+```{r 3d, warning=FALSE}
+boxplot((Enf_GU / mean(Enf_GU)) ~ cycle(Enf_GU), outline = FALSE,main='Estacionalidad', xlab='Meses', ylab = 'Fallecimientos') 
+tapply(Enf_GU / mean(Enf_GU), cycle(Enf_GU), mean) # Estacionalidad
+```
+
+De manera numérica y gráfica se puede apreciar cómo va variando el número de fallecimientos a lo largo del año usando los valores de los distintos años. Se puede observar que en los meses mas frios es donde la incidencia es mayor (diciembre, enero, febrero y marzo) y a medida que el clima se suaviza tabién lo hace esta incidencia. Cabe mencionar que en el mes de julio, uno de los más cálidos, hay un aumento en el número de fallecimientos. Por lo tanto, las enfermedades que afectan al sistema genitourinario se manifiestan de forma más acusada tanto en meses muy frios como en el mes de julio.
+
+```{r error}
+residuo <- window(egu_decmul$x - egu_decmul$trend*egu_decmul$seasonal,start = c(1980, 7), end = c(2017, 6)) #Residuo aditivo.
+
+se <- sd(residuo, na.rm = TRUE) #Calculo sus desviaciones típicas.
+plot(residuo,
+xlab = 'Periodo', ylab = 'Casos', xaxt = "n",
+main = "Error de la descomposición",
+col = "Black", lwd = 1, ylim = c(-150, 300))
+axis(1, at = seq(1980, 2017, 2))
+abline(h = c(-3 * se, -2 * se, 2 * se, 3 * se),
+lty = 2, lwd = 2, col = c("Grey", "Black", "Black", "Grey")) #Intervención, valores atípicos y ruido blanco.
+# residuo < 3*se
+
+residuo > 3*se #De esta forma veo cuales son los años y el mes en donde está el valor atípico
+residuo < -3*se
+residuo >2*se
+residuo < -2*se
+```
+
+En el gráfico anterior se observa cómo varía el residuo a lo largo de los años y parece heterocedástico e incorrelado.
+Además, se aprecian varios valores atípicos que superan las tres desviaciones típicas (99.7%) por la superior (octubre de 2003, enero de 2005, febrero de 2012 y enero de 2015) que superaron los casos estimados.
+
+También pueden observarse varios meses que sobrepasan las dos desviaciones típicas por la parte superior: febrero de 1999, enero de 2000, agosto 2003, enero de 2005, julio de 2006, enero de 2009, febrero de 2012 y enero de 2015, y por la parte inferior: marzo de 1994, agosto de 1996, febrero de 2004, julio de 2012 y enero de 2016. Esto quiere decir que hay determinados meses cuyo número de casos es ligeramente superior o inferior a su estimación.
+
+
+### Apartado e
+
+Como recopilación de lo visto con anterioridad, la serie temporal de enfermedades del sistema genitourinario presenta una tendencia ascendente siendo estacionaria entre los años de 1990 y 1998 volviendo a ser ascendente. Esto puede explicarse en relación al aumento de la calidad de vida que a prolongado la esperanza de vivir más años y con ello el aumento de las diversas enfermedades.
+Con respecto a la estacionalidad se ha podido ver que en los meses de diciembre, enero, febrero y marzo la incidencia es mayor, lo cual correspondería a los meses más frio y hay además un pequeño aumento también en el mes de julio, un mes cálido y esto puede ser debido al cambio de estación de primavera a verano.
+Aparte, con respecto al residuo, se identifican varios valores atípicos a lo largo de la serie en donde la cantidad de fallecimiento tiene un valor inferior al estimado (agosto 1996) mientras que hay otros años, en un mes en concreto, en donde esta cantidad se dispara (octubre de 2003, enero de 2005, febrero de 2012 y enero de 2015).
+
+Para finalizar, en cuanto al esquema que sigue la serie temporal se ha visto que es multiplicativo ya que la desviación típica intra-anual aumenta en relación al número de casos de fallecimientos.
+
+## Ejercicio 2. Análisis del residuo.
+
+Para comenzar, me fijo en la gráfica de "error de la descomposición" y se puede observar que a lo largo de los años el error se mantiene entre dos desviaciones típicas, lo cual puede considerarse ruido blanco.
+
+```{r parte 2a}
+plot(residuo, lag(residuo),pch = 20, main = "Analisis incorrelacion") #Incorrelación
+```
+
+Por otro lado, cuando realizo el análisis de incorrelación, observo que el residuo se distribuye como una nube de puntos sin mostrar patrón alguno, lo cual me informa de que el residuo es incorrelado.
+
+```{r parte 22}
+xd <- aggregate(residuo,FUN=sd)
+plot(xd,type = "p", pch = 20,
+xlab = 'Periodo', ylab = "Desviacion estandar",
+main = "Analisis homocedasticidad") #Heterocedasticidad
+locator()
+```
+
+Para finalizar me fijo en el gráfico que enfrenta la desviación estandar con los distintos años y veo que el residuo es heterocedástico, pues no se mantiene constante a medida que pasa el tiempo.
